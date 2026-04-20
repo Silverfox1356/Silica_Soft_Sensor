@@ -1,0 +1,34 @@
+feature
+% Iron Feed
+% Silica Feed
+Starch Flow
+Amina Flow
+Ore Pulp Flow
+Ore Pulp pH
+Flotation Column 01 Air Flow
+Flotation Column 02 Air Flow
+Flotation Column 03 Air Flow
+Flotation Column 06 Air Flow
+Flotation Column 07 Air Flow
+Flotation Column 01 Level
+Flotation Column 02 Level
+Flotation Column 03 Level
+Flotation Column 04 Level
+Flotation Column 05 Level
+Flotation Column 06 Level
+Flotation Column 07 Level
+% Iron Concentrate
+Silica_lag_1
+Silica_lag_2
+Iron_Concentrate_lag1
+Iron_Concentrate_lag2
+Silica_delta
+Iron_Conc_delta
+Amina Flow_lag1
+Starch Flow_lag1
+Flotation Column 01 Air Flow_lag1
+Flotation Column 01 Air Flow_roll_mean3
+Flotation Column 01 Air Flow_roll_std3
+Flotation Column 03 Air Flow_roll_mean3
+Flotation Column 03 Air Flow_roll_std3
+Amina_x_Col01Air

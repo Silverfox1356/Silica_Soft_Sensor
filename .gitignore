@@ -1,0 +1,32 @@
+# Virtual Environments
+venv/
+env/
+.env/
+.venv/
+
+# Python Cache & Compiled Files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Jupyter Notebook Checkpoints
+.ipynb_checkpoints/
+
+# OS Specific Junk
+.DS_Store
+Thumbs.db
+
+# IDE Folders (VS Code, PyCharm)
+.vscode/
+.idea/
+figures/
+
+# Secret Files
+secrets.toml
+.env
+
+# Large Files
+# *.csv
+# *.dat

@@ -66,9 +66,9 @@ h1, h2, h3 { font-family: 'IBM Plex Mono', monospace; }
 # ── Load artifacts ───────────────────────────────────────────────
 @st.cache_resource
 def load_artifacts():
-    model    = joblib.load('rf_silica_model.pkl')   # RF is best model
-    features = pd.read_csv('feature_list.csv')['feature'].tolist()
-    metrics  = pd.read_csv('model_metrics.csv', index_col=0)
+    model    = joblib.load('models/rf_silica_model.pkl')
+    features = pd.read_csv('data/feature_list.csv')['feature'].tolist()
+    metrics  = pd.read_csv('data/model_metrics.csv', index_col=0)
     return model, features, metrics
 
 model, FEATURES, metrics_df = load_artifacts()

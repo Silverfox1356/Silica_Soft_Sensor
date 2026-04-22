@@ -6,6 +6,8 @@ import shap
 import matplotlib.pyplot as plt
 import matplotlib
 import plotly.graph_objects as go
+from config import BOUNDS, DEFAULTS, ENG_DEFAULTS, FEED_COLS, REAGENT_COLS, OTHER_COLS
+
 matplotlib.use('Agg')
 
 # ── Page config ──────────────────────────────────────────────────
@@ -17,13 +19,12 @@ st.set_page_config(
 )
 
 # ── Styling ──────────────────────────────────────────────────────
+# Note: Colors are now handled natively via .streamlit/config.toml
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
 
-html, body, [class*="css"] { font-family: 'IBM Plex Sans', sans-serif; }
 h1, h2, h3 { font-family: 'IBM Plex Mono', monospace; }
-.stApp { background-color: #0f1117; color: #e8eaf0; }
 
 .metric-card {
     background: #1a1d27;
@@ -56,21 +57,6 @@ h1, h2, h3 { font-family: 'IBM Plex Mono', monospace; }
     margin-bottom: 0.8rem;
     margin-top: 1rem;
 }
-.model-badge {
-    display: inline-block;
-    background: #1a1d27;
-    border: 1px solid #2a2d3a;
-    border-radius: 20px;
-    padding: 0.25rem 0.8rem;
-    font-size: 0.78rem;
-    font-family: 'IBM Plex Mono', monospace;
-    margin-right: 0.4rem;
-    margin-bottom: 0.4rem;
-}
-/* Override Streamlit slider track colour */
-div[data-testid="stSlider"] .st-emotion-cache-1inwz65 { background: #4ade80; }
-div[data-testid="stNumberInput"] label,
-div[data-testid="stSlider"] label { font-size: 0.78rem !important; color: #a0a3b1 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -87,64 +73,8 @@ def load_artifacts():
 
 rf_model, lasso_model, xgb_model, scaler, FEATURES, metrics_df = load_artifacts()
 
-MODELS = {
-    'Random Forest': rf_model,
-    'Lasso':         lasso_model,
-    'XGBoost':       xgb_model,
-}
-
-# ── Constants ────────────────────────────────────────────────────
-BOUNDS = {
-    '% Iron Feed':                   (42.74, 65.78),
-    '% Silica Feed':                 (1.31,  33.40),
-    'Starch Flow':                   (54.6,  6270.2),
-    'Amina Flow':                    (242.9, 737.0),
-    'Ore Pulp Flow':                 (376.8, 418.1),
-    'Ore Pulp pH':                   (8.75,  10.81),
-    'Flotation Column 01 Air Flow':  (175.9, 312.3),
-    'Flotation Column 02 Air Flow':  (178.2, 309.9),
-    'Flotation Column 03 Air Flow':  (177.2, 302.8),
-    'Flotation Column 06 Air Flow':  (196.5, 355.0),
-    'Flotation Column 07 Air Flow':  (199.7, 351.3),
-    'Flotation Column 01 Level':     (181.9, 859.0),
-    'Flotation Column 02 Level':     (224.9, 827.8),
-    'Flotation Column 03 Level':     (135.2, 884.8),
-    'Flotation Column 04 Level':     (165.7, 675.6),
-    'Flotation Column 05 Level':     (214.7, 674.1),
-    'Flotation Column 06 Level':     (203.7, 698.5),
-    'Flotation Column 07 Level':     (185.1, 655.5),
-    '% Iron Concentrate':            (62.05, 68.01),
-}
-
-DEFAULTS = {
-    '% Iron Feed': 56.3, '% Silica Feed': 14.7, 'Starch Flow': 2869.0,
-    'Amina Flow': 488.1, 'Ore Pulp Flow': 397.6, 'Ore Pulp pH': 9.77,
-    'Flotation Column 01 Air Flow': 280.2, 'Flotation Column 02 Air Flow': 277.2,
-    'Flotation Column 03 Air Flow': 281.1, 'Flotation Column 06 Air Flow': 292.1,
-    'Flotation Column 07 Air Flow': 290.8, 'Flotation Column 01 Level': 520.2,
-    'Flotation Column 02 Level': 522.6,  'Flotation Column 03 Level': 531.4,
-    'Flotation Column 04 Level': 420.3,  'Flotation Column 05 Level': 425.3,
-    'Flotation Column 06 Level': 429.9,  'Flotation Column 07 Level': 421.0,
-    '% Iron Concentrate': 65.05,
-}
-
-ENG_DEFAULTS = {
-    'Silica_lag_1': 2.33, 'Silica_lag_2': 2.33,
-    'Iron_Concentrate_lag1': 65.05, 'Iron_Concentrate_lag2': 65.05,
-    'Amina Flow_lag1': 488.1, 'Starch Flow_lag1': 2869.0,
-    'Flotation Column 01 Air Flow_lag1': 280.2,
-    'Flotation Column 01 Air Flow_roll_mean3': 280.2,
-    'Flotation Column 01 Air Flow_roll_std3': 5.0,
-    'Flotation Column 03 Air Flow_roll_mean3': 281.1,
-    'Flotation Column 03 Air Flow_roll_std3': 5.0,
-    'Amina_x_Col01Air': 488.1 * 280.2,
-}
-
-FEED_COLS    = ['% Iron Feed', '% Silica Feed', 'Ore Pulp Flow', 'Ore Pulp pH']
-REAGENT_COLS = ['Starch Flow', 'Amina Flow']
-AIR_COLS     = [f for f in FEATURES if 'Air Flow' in f and 'lag' not in f and 'roll' not in f]
-LEVEL_COLS   = [f for f in FEATURES if 'Level' in f and 'lag' not in f and 'roll' not in f]
-OTHER_COLS   = ['% Iron Concentrate']
+AIR_COLS   = [f for f in FEATURES if 'Air Flow' in f and 'lag' not in f and 'roll' not in f]
+LEVEL_COLS = [f for f in FEATURES if 'Level' in f and 'lag' not in f and 'roll' not in f]
 
 # ── Session state ────────────────────────────────────────────────
 if 'trend' not in st.session_state:
@@ -231,7 +161,6 @@ if page == "🔬 Predict":
         inputs = {}
         out_of_range = []
 
-        # Reset button
         if st.button("↺ Reset to defaults", use_container_width=True):
             st.session_state.reset = True
             st.rerun()
@@ -246,11 +175,9 @@ if page == "🔬 Predict":
                 s_max     = round(float(hi) * 1.2, 2)
                 key_state = f"sl_{col}"
 
-                # Initialise session state on first load
                 if key_state not in st.session_state:
                     st.session_state[key_state] = default
 
-                # Render a single slider. Users can click the number to manually type.
                 st.slider(
                     col,
                     min_value=s_min,
@@ -264,7 +191,6 @@ if page == "🔬 Predict":
 
                 st.markdown("<div style='margin-bottom:0.4rem'></div>", unsafe_allow_html=True)
 
-        # Implement the Tabbed UI
         tab_feed, tab_reag, tab_air, tab_lvl, tab_out = st.tabs([
             "🪨 Feed", "🧪 Reagents", "💨 Air Flow", "📏 Levels", "🎯 Conc."
         ])
@@ -288,24 +214,20 @@ if page == "🔬 Predict":
     # ── RIGHT: Results ───────────────────────────────────────────
     with col_results:
 
-        # Fill engineered features
         for feat in FEATURES:
             if feat not in inputs:
                 inputs[feat] = ENG_DEFAULTS.get(feat, 0.0)
 
         X_in_raw = np.array([inputs[f] for f in FEATURES]).reshape(1, -1)
 
-        # RF prediction + confidence
         rf_pred, rf_std = rf_confidence(rf_model, X_in_raw)
         rf_lo = rf_pred - 1.96 * rf_std
         rf_hi = rf_pred + 1.96 * rf_std
 
-        # Lasso needs scaled input
         X_in_sc = scaler.transform(X_in_raw)
         lasso_pred = float(lasso_model.predict(X_in_sc)[0])
         xgb_pred   = float(xgb_model.predict(X_in_raw)[0])
 
-        # Primary prediction = RF
         pred = rf_pred
 
         if pred > SPEC_LIMIT:
@@ -318,17 +240,27 @@ if page == "🔬 Predict":
             pred_color = "#4ade80"
             alert_text = "✓ WITHIN SPECIFICATION"
 
-        # Gauge
+        # Delta Logic
+        delta_html = ""
+        if len(st.session_state.trend) > 0:
+            last_pred = st.session_state.trend[-1]
+            delta = pred - last_pred
+            if delta > 0.005:
+                delta_html = f"<span style='color:#f87171;font-size:0.9rem;margin-left:8px;vertical-align:middle;'>↑ +{delta:.2f}%</span>"
+            elif delta < -0.005:
+                delta_html = f"<span style='color:#4ade80;font-size:0.9rem;margin-left:8px;vertical-align:middle;'>↓ {delta:.2f}%</span>"
+            else:
+                delta_html = f"<span style='color:#8b8fa8;font-size:0.9rem;margin-left:8px;vertical-align:middle;'>→ 0.00%</span>"
+
         st.markdown('<p class="section-header">Predicted % SiO₂</p>', unsafe_allow_html=True)
         st.plotly_chart(make_gauge(pred, SPEC_LIMIT), use_container_width=True)
 
-        # Alert + confidence
         c1, c2 = st.columns(2)
         with c1:
             st.markdown(f"""
             <div class="metric-card" style="border-color:{pred_color}">
                 <div class="metric-value" style="color:{pred_color};font-size:1.0rem;padding:0.5rem 0">
-                    {alert_text}
+                    {alert_text} {delta_html}
                 </div>
                 <div class="metric-label">Spec limit: {SPEC_LIMIT:.1f}%</div>
             </div>""", unsafe_allow_html=True)
@@ -348,7 +280,6 @@ if page == "🔬 Predict":
                 {', '.join(out_of_range)}
             </div>""", unsafe_allow_html=True)
 
-        # Model comparison
         st.markdown('<p class="section-header">Model Comparison</p>', unsafe_allow_html=True)
         comp_df = pd.DataFrame({
             'Model': ['Lasso', 'Random Forest', 'XGBoost'],
@@ -386,7 +317,6 @@ if page == "🔬 Predict":
         )
         st.plotly_chart(fig_comp, use_container_width=True)
 
-        # Trend
         st.markdown('<p class="section-header">Prediction Trend</p>', unsafe_allow_html=True)
         if st.button("📌 Log this prediction", use_container_width=True):
             st.session_state.trend.append(round(pred, 3))
@@ -423,7 +353,6 @@ if page == "🔬 Predict":
                 Log 2+ predictions to see the trend chart.
             </div>""", unsafe_allow_html=True)
 
-        # SHAP waterfall
         st.markdown('<p class="section-header">SHAP — What drove this prediction</p>',
                     unsafe_allow_html=True)
         try:
@@ -450,45 +379,35 @@ elif page == "📁 Batch Predict":
     st.markdown("Upload a CSV file containing historical sensor readings to generate bulk predictions.")
     st.markdown("---")
 
-    # File uploader
     uploaded_file = st.file_uploader("Upload CSV file (must contain process sensor columns)", type=['csv'])
 
     if uploaded_file is not None:
         try:
-            # Read the uploaded CSV
             df_upload = pd.read_csv(uploaded_file)
             st.success(f"✓ File loaded successfully: {len(df_upload)} rows found.")
             
-            # Create a working copy for model input
             df_process = df_upload.copy()
             
-            # Ensure all required features exist
             missing_cols = [col for col in FEATURES if col not in df_process.columns]
             if missing_cols:
                 st.warning(f"⚠ Missing {len(missing_cols)} required columns. Filling with default values to allow prediction.")
                 for col in missing_cols:
-                    # Use engineering default if available, otherwise standard default, otherwise 0
                     df_process[col] = ENG_DEFAULTS.get(col, DEFAULTS.get(col, 0.0))
             
-            # Extract features in the exact order the models expect
             X_batch = df_process[FEATURES].values
             
             with st.spinner("Generating predictions..."):
-                # Fast standard predictions for batch (skipping confidence intervals for speed)
                 rf_preds   = rf_model.predict(X_batch)
                 xgb_preds  = xgb_model.predict(X_batch)
                 
-                # Lasso requires scaling
                 X_batch_sc = scaler.transform(X_batch)
                 lasso_preds = lasso_model.predict(X_batch_sc)
                 
-            # Append predictions to the ORIGINAL uploaded dataframe
             results_df = df_upload.copy()
             results_df.insert(0, 'Predicted % SiO₂ (XGBoost)', xgb_preds)
             results_df.insert(0, 'Predicted % SiO₂ (Lasso)', lasso_preds)
             results_df.insert(0, 'Predicted % SiO₂ (Random Forest)', rf_preds)
             
-            # Formatting to 3 decimal places for cleanliness
             results_df['Predicted % SiO₂ (Random Forest)'] = results_df['Predicted % SiO₂ (Random Forest)'].round(3)
             results_df['Predicted % SiO₂ (Lasso)'] = results_df['Predicted % SiO₂ (Lasso)'].round(3)
             results_df['Predicted % SiO₂ (XGBoost)'] = results_df['Predicted % SiO₂ (XGBoost)'].round(3)
@@ -496,7 +415,6 @@ elif page == "📁 Batch Predict":
             st.markdown('<p class="section-header">Prediction Preview</p>', unsafe_allow_html=True)
             st.dataframe(results_df.head(15), use_container_width=True)
 
-            # Convert to CSV for download
             csv_export = results_df.to_csv(index=False).encode('utf-8')
             
             st.markdown("<br>", unsafe_allow_html=True)
@@ -641,7 +559,7 @@ elif page == "🔍 Feature Importance":
         """)
 
 # ════════════════════════════════════════
-# PAGE 4 - ABOUT
+# PAGE 4 — ABOUT
 # ════════════════════════════════════════
 elif page == "📋 About":
     st.markdown("## About This Project")

@@ -237,54 +237,54 @@ if page == "🔬 Predict":
             st.rerun()
 
         def render_sliders(cols, label):
-    st.markdown(f'<p class="section-header">{label}</p>', unsafe_allow_html=True)
-    for col in cols:
-        if col not in FEATURES:
-            continue
-        lo, hi  = BOUNDS.get(col, (0.0, 1000.0))
-        default = float(DEFAULTS.get(col, (lo + hi) / 2))
-        s_min   = round(float(lo) * 0.8, 2)
-        s_max   = round(float(hi) * 1.2, 2)
+            st.markdown(f'<p class="section-header">{label}</p>', unsafe_allow_html=True)
+            for col in cols:
+                if col not in FEATURES:
+                    continue
+                lo, hi    = BOUNDS.get(col, (0.0, 1000.0))
+                default   = float(DEFAULTS.get(col, (lo + hi) / 2))
+                s_min     = round(float(lo) * 0.8, 2)
+                s_max     = round(float(hi) * 1.2, 2)
+                key_state = f"val_{col}"
 
-        # Initialise session state
-        key_state = f"val_{col}"
-        if key_state not in st.session_state:
-            st.session_state[key_state] = default
+                # Initialise session state on first load
+                if key_state not in st.session_state:
+                    st.session_state[key_state] = default
 
-        # Slider
-        slider_val = st.slider(
-            col,
-            min_value=s_min,
-            max_value=s_max,
-            value=st.session_state[key_state],
-            key=f"sl_{col}",
-        )
+                # Slider on top
+                slider_val = st.slider(
+                    col,
+                    min_value=s_min,
+                    max_value=s_max,
+                    value=float(st.session_state[key_state]),
+                    key=f"sl_{col}",
+                )
 
-        # Number input below slider — step scaled to range
-        step = round((s_max - s_min) / 200, 3)
-        num_val = st.number_input(
-            "Manual entry",
-            min_value=s_min,
-            max_value=s_max,
-            value=slider_val,        # always follows the slider
-            step=step,
-            format="%.2f",
-            key=f"ni_{col}",
-            label_visibility="collapsed",
-        )
+                # Number input below — always reflects slider value
+                step = round((s_max - s_min) / 200, 3)
+                num_val = st.number_input(
+                    "Manual entry",
+                    min_value=s_min,
+                    max_value=s_max,
+                    value=float(slider_val),
+                    step=step,
+                    format="%.2f",
+                    key=f"ni_{col}",
+                    label_visibility="collapsed",
+                )
 
-        # Sync: whichever changed last wins
-        if num_val != slider_val:
-            st.session_state[key_state] = num_val
-            st.rerun()
-        else:
-            st.session_state[key_state] = slider_val
+                # Sync: if number input was changed manually, update state and rerun
+                if abs(num_val - slider_val) > 1e-6:
+                    st.session_state[key_state] = num_val
+                    st.rerun()
+                else:
+                    st.session_state[key_state] = slider_val
 
-        inputs[col] = st.session_state[key_state]
-        if inputs[col] < lo or inputs[col] > hi:
-            out_of_range.append(col)
+                inputs[col] = st.session_state[key_state]
+                if inputs[col] < lo or inputs[col] > hi:
+                    out_of_range.append(col)
 
-        st.markdown("<div style='margin-bottom:0.6rem'></div>", unsafe_allow_html=True)
+                st.markdown("<div style='margin-bottom:0.4rem'></div>", unsafe_allow_html=True)
 
         render_sliders(FEED_COLS,    "Feed & Pulp")
         render_sliders(REAGENT_COLS, "Reagents")

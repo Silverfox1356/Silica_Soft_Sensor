@@ -410,7 +410,27 @@ elif page == "📁 Batch Predict":
     st.markdown("Upload a CSV file containing historical sensor readings to generate bulk predictions.")
     st.markdown("---")
 
-    uploaded_file = st.file_uploader("Upload CSV file (must contain process sensor columns)", type=['csv'])
+    # ── TEMPLATE DOWNLOAD SECTION ──
+    st.markdown('<p class="section-header">1. Get the Template</p>', unsafe_allow_html=True)
+    st.markdown("Download this template to ensure your columns match exactly what the models expect. It includes one row of baseline example data.")
+    
+    # Generate the template dynamically based on FEATURES list
+    example_row = {feat: ENG_DEFAULTS.get(feat, DEFAULTS.get(feat, 0.0)) for feat in FEATURES}
+    template_df = pd.DataFrame([example_row])
+    template_csv = template_df.to_csv(index=False).encode('utf-8')
+    
+    st.download_button(
+        label="📄 Download CSV Template",
+        data=template_csv,
+        file_name="silica_batch_template.csv",
+        mime="text/csv",
+    )
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── UPLOAD SECTION ──
+    st.markdown('<p class="section-header">2. Upload & Predict</p>', unsafe_allow_html=True)
+    uploaded_file = st.file_uploader("Upload filled CSV file", type=['csv'], label_visibility="collapsed")
 
     if uploaded_file is not None:
         try:
@@ -421,7 +441,7 @@ elif page == "📁 Batch Predict":
             
             missing_cols = [col for col in FEATURES if col not in df_process.columns]
             if missing_cols:
-                st.warning(f"⚠ Missing {len(missing_cols)} required columns. Filling with default values to allow prediction.")
+                st.warning(f"⚠ Missing {len(missing_cols)} required columns: **{', '.join(missing_cols)}**. Filling with default values to allow prediction.")
                 for col in missing_cols:
                     df_process[col] = ENG_DEFAULTS.get(col, DEFAULTS.get(col, 0.0))
             
@@ -460,7 +480,6 @@ elif page == "📁 Batch Predict":
         except Exception as e:
             st.error(f"Error processing file: {str(e)}")
             st.info("Please ensure the uploaded file is a valid CSV formatted with the correct sensor column names.")
-
 # ════════════════════════════════════════
 # PAGE 2 — MODEL PERFORMANCE
 # ════════════════════════════════════════

@@ -226,7 +226,7 @@ if page == "🔬 Predict":
 
     col_inputs, col_results = st.columns([1, 1], gap="large")
 
-    # ── LEFT: Sensor inputs with sliders ────────────────────────
+    # ── LEFT: Sensor inputs with Tabs ───────────────────────────
     with col_inputs:
         inputs = {}
         out_of_range = []
@@ -236,8 +236,7 @@ if page == "🔬 Predict":
             st.session_state.reset = True
             st.rerun()
 
-        def render_sliders(cols, label):
-            st.markdown(f'<p class="section-header">{label}</p>', unsafe_allow_html=True)
+        def render_sliders(cols):
             for col in cols:
                 if col not in FEATURES:
                     continue
@@ -245,59 +244,46 @@ if page == "🔬 Predict":
                 default   = float(DEFAULTS.get(col, (lo + hi) / 2))
                 s_min     = round(float(lo) * 0.8, 2)
                 s_max     = round(float(hi) * 1.2, 2)
-                step      = round((s_max - s_min) / 200, 3)
-                
-                # Define keys for the two widgets
-                sl_key = f"sl_{col}"
-                ni_key = f"ni_{col}"
+                key_state = f"sl_{col}"
 
-                # Initialise BOTH widget keys in session state on first load
-                if sl_key not in st.session_state:
-                    st.session_state[sl_key] = default
-                if ni_key not in st.session_state:
-                    st.session_state[ni_key] = default
+                # Initialise session state on first load
+                if key_state not in st.session_state:
+                    st.session_state[key_state] = default
 
-                # Callback: slider changed → copy value to number input
-                def on_slider(slider_k=sl_key, num_k=ni_key):
-                    st.session_state[num_k] = st.session_state[slider_k]
-
-                # Callback: number input changed → copy value to slider
-                def on_number(slider_k=sl_key, num_k=ni_key):
-                    st.session_state[slider_k] = st.session_state[num_k]
-
-                # Slider — reads/writes directly to sl_key (no 'value' arg needed)
+                # Render a single slider. Users can click the number to manually type.
                 st.slider(
                     col,
                     min_value=s_min,
                     max_value=s_max,
-                    key=sl_key,
-                    on_change=on_slider,
+                    key=key_state,
                 )
 
-                # Number input — reads/writes directly to ni_key (no 'value' arg needed)
-                st.number_input(
-                    "Manual entry",
-                    min_value=s_min,
-                    max_value=s_max,
-                    step=step,
-                    format="%.2f",
-                    key=ni_key,
-                    on_change=on_number,
-                    label_visibility="collapsed",
-                )
-
-                # Read the final value to use in your model inputs array
-                inputs[col] = float(st.session_state[sl_key])
+                inputs[col] = float(st.session_state[key_state])
                 if inputs[col] < lo or inputs[col] > hi:
                     out_of_range.append(col)
 
                 st.markdown("<div style='margin-bottom:0.4rem'></div>", unsafe_allow_html=True)
 
-        render_sliders(FEED_COLS,    "Feed & Pulp")
-        render_sliders(REAGENT_COLS, "Reagents")
-        render_sliders(AIR_COLS,     "Air Flow")
-        render_sliders(LEVEL_COLS,   "Column Levels")
-        render_sliders(OTHER_COLS,   "Concentrate")
+        # Implement the Tabbed UI
+        tab_feed, tab_reag, tab_air, tab_lvl, tab_out = st.tabs([
+            "🪨 Feed", "🧪 Reagents", "💨 Air Flow", "📏 Levels", "🎯 Conc."
+        ])
+
+        with tab_feed:
+            st.markdown('<p class="section-header">Feed & Pulp Parameters</p>', unsafe_allow_html=True)
+            render_sliders(FEED_COLS)
+        with tab_reag:
+            st.markdown('<p class="section-header">Chemical Reagents</p>', unsafe_allow_html=True)
+            render_sliders(REAGENT_COLS)
+        with tab_air:
+            st.markdown('<p class="section-header">Flotation Air Flow</p>', unsafe_allow_html=True)
+            render_sliders(AIR_COLS)
+        with tab_lvl:
+            st.markdown('<p class="section-header">Flotation Column Levels</p>', unsafe_allow_html=True)
+            render_sliders(LEVEL_COLS)
+        with tab_out:
+            st.markdown('<p class="section-header">Concentrate Properties</p>', unsafe_allow_html=True)
+            render_sliders(OTHER_COLS)
 
     # ── RIGHT: Results ───────────────────────────────────────────
     with col_results:
@@ -563,30 +549,24 @@ elif page == "🔍 Feature Importance":
     c1, c2 = st.columns(2)
     with c1:
         st.markdown("""
-        **% Iron Concentrate (SHAP: 0.590)**  
-        Dominant predictor — iron and silica are inversely related in the concentrate.
+        **% Iron Concentrate (SHAP: 0.590)** Dominant predictor — iron and silica are inversely related in the concentrate.
         High iron content reliably signals low silica and vice versa.
 
-        **Silica_lag_1 (SHAP: 0.333)**  
-        Silica 2 hours ago is the second most important feature. The flotation circuit
+        **Silica_lag_1 (SHAP: 0.333)** Silica 2 hours ago is the second most important feature. The flotation circuit
         has process memory — conditions don't change instantaneously between measurements.
 
-        **Iron_Concentrate_lag1 (SHAP: 0.096)**  
-        Iron concentrate trend matters as much as its current value. A falling iron
+        **Iron_Concentrate_lag1 (SHAP: 0.096)** Iron concentrate trend matters as much as its current value. A falling iron
         reading predicts rising silica ahead.
         """)
     with c2:
         st.markdown("""
-        **Iron_Concentrate_lag2 (SHAP: 0.037)**  
-        Extending the iron trend window to 4 hours back captures slower shift-level
+        **Iron_Concentrate_lag2 (SHAP: 0.037)** Extending the iron trend window to 4 hours back captures slower shift-level
         process changes that lag_1 alone misses.
 
-        **Silica_lag_2 (SHAP: 0.029)**  
-        Silica 4 hours ago helps distinguish sustained trends from transient spikes,
+        **Silica_lag_2 (SHAP: 0.029)** Silica 4 hours ago helps distinguish sustained trends from transient spikes,
         giving the model longer-range process context.
 
-        **Col 01 Air Flow rolling mean (SHAP: 0.016)**  
-        Average air flow over the last 3 windows captures process stability better
+        **Col 01 Air Flow rolling mean (SHAP: 0.016)** Average air flow over the last 3 windows captures process stability better
         than an instantaneous reading alone.
         """)
 

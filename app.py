@@ -518,7 +518,7 @@ elif page == "📊 Model Performance":
     with c3:
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-value" style="color:#a78bfa">95.6%</div>
+            <div class="metric-value" style="color:#a78bfa">89.0%</div>
             <div class="metric-label">Within ±1% SiO₂</div>
         </div>""", unsafe_allow_html=True)
 
@@ -542,17 +542,18 @@ elif page == "🔍 Feature Importance":
 
     st.markdown('<p class="section-header">What drives silica variation</p>', unsafe_allow_html=True)
 
+    # Final SHAP values — retrained model with % Iron Concentrate leakage removed
     top_features = {
-        '% Iron Concentrate':                      0.590,
-        'Silica_lag_1':                            0.333,
-        'Iron_Concentrate_lag1':                   0.096,
-        'Iron_Concentrate_lag2':                   0.037,
-        'Silica_lag_2':                            0.029,
-        'Flotation Column 01 Air Flow_roll_mean3': 0.016,
-        'Ore Pulp Flow':                           0.018,
-        'Flotation Column 06 Level':               0.018,
-        'Flotation Column 03 Level':               0.015,
-        'Silica_delta':                            0.017,
+        'Silica_lag_1':                   0.612,
+        'Ore Pulp Flow':                  0.053,
+        'Flotation Column 07 Level':      0.033,
+        'Iron_Concentrate_lag1':          0.030,
+        'Iron_Concentrate_lag2':          0.029,
+        'Flotation Column 03 Air Flow':   0.027,
+        'Flotation Column 06 Air Flow':   0.026,
+        'Amina Flow':                     0.026,
+        'Silica_lag_2':                   0.024,
+        'Flotation Column 07 Air Flow':   0.023,
     }
 
     shap_series = pd.Series(top_features).sort_values()
@@ -587,25 +588,32 @@ elif page == "🔍 Feature Importance":
     c1, c2 = st.columns(2)
     with c1:
         st.markdown("""
-        **% Iron Concentrate (SHAP: 0.590)** Dominant predictor — iron and silica are inversely related in the concentrate.
-        High iron content reliably signals low silica and vice versa.
+        **Silica_lag_1 (SHAP: 0.612)**  
+        The dominant feature — silica 2 hours ago anchors the prediction. Flotation is a
+        slow-changing process and the last known lab result is the strongest available signal.
+        The model estimates the current value as a deviation from this anchor.
 
-        **Silica_lag_1 (SHAP: 0.333)** Silica 2 hours ago is the second most important feature. The flotation circuit
-        has process memory — conditions don't change instantaneously between measurements.
+        **Ore Pulp Flow (SHAP: 0.053)**  
+        Feed flow rate affects residence time in the flotation columns. Higher flow reduces
+        contact time between bubbles and particles, typically increasing silica in concentrate.
 
-        **Iron_Concentrate_lag1 (SHAP: 0.096)** Iron concentrate trend matters as much as its current value. A falling iron
-        reading predicts rising silica ahead.
+        **Iron_Concentrate_lag1 (SHAP: 0.030)**  
+        The last known iron concentrate reading. A falling iron trend 2 hours ago signals
+        deteriorating separation, predicting higher silica now.
         """)
     with c2:
         st.markdown("""
-        **Iron_Concentrate_lag2 (SHAP: 0.037)** Extending the iron trend window to 4 hours back captures slower shift-level
-        process changes that lag_1 alone misses.
+        **Flotation Column 07 Level (SHAP: 0.033)**  
+        Column level controls the froth depth and residence time. Deviations from setpoint
+        indicate unstable froth conditions that affect silica removal efficiency.
 
-        **Silica_lag_2 (SHAP: 0.029)** Silica 4 hours ago helps distinguish sustained trends from transient spikes,
-        giving the model longer-range process context.
+        **Amina Flow (SHAP: 0.026)**  
+        The amine collector controls silica surface hydrophobicity. Its effect is nonlinear —
+        both under-dosing and over-dosing reduce separation efficiency.
 
-        **Col 01 Air Flow rolling mean (SHAP: 0.016)** Average air flow over the last 3 windows captures process stability better
-        than an instantaneous reading alone.
+        **Air Flow columns (SHAP: 0.023–0.027)**  
+        Air flow rate determines bubble surface area available for flotation. The three air
+        flow columns together contribute meaningful real-time process signal.
         """)
 
 # ════════════════════════════════════════
@@ -633,15 +641,20 @@ elif page == "📋 About":
         ### Methodology
         - **Dataset**: 737,453 rows of 20-second sensor data (March-September 2017), resampled to 2-hour intervals to align with lab measurement cadence
         - **Models**: Lasso Regression, Random Forest, and XGBoost, compared against a rolling mean baseline
-        - **Feature engineering**: Lag features (process memory), rolling statistics (process stability), interaction terms (reagent chemistry)
+        - **Feature engineering**: Lag features (process memory anchors), rolling statistics (process stability), interaction terms (reagent chemistry)
+        - **Leakage prevention**: Concurrent % Iron Concentrate excluded — arrives simultaneously with target and is unavailable at prediction time. Lagged values retained as legitimate anchors
         - **Hyperparameter tuning**: Bayesian optimisation via Optuna with TimeSeriesSplit cross-validation
         - **Explainability**: SHAP TreeExplainer for prediction-level interpretation
         - **Validation**: Strict chronological 80/20 split with no shuffling and no future data leakage
 
         ### Key Result
-        Lasso Regression achieved the best performance with **R² = 0.825**, **MAE = 0.347% SiO₂**,
-        with **95.6%** of predictions falling within ±1% SiO₂ of actual lab measurements,
-        compared to a conventional rolling mean baseline of R² = 0.42.
+        After removing the concurrent % Iron Concentrate feature (data leakage), models were
+        retrained on genuinely real-time sensor data. Lasso Regression achieved the best
+        performance with **R² = 0.608**, **MAE = 0.502% SiO₂**, with **89.0%** of predictions
+        falling within ±1% SiO₂ of actual lab measurements — compared to a conventional
+        rolling mean baseline of R² = 0.42. The honest model confirms that process memory
+        (lag features) is the dominant signal, with hardware sensors providing incremental
+        real-time adjustment.
         """)
 
     with c2:
@@ -654,9 +667,9 @@ elif page == "📋 About":
         | **Course** | CL653 |
         | **Institute** | IIT Guwahati |
         | **Best Model** | Lasso Regression |
-        | **R²** | 0.825 |
-        | **MAE** | 0.347% SiO₂ |
-        | **Within ±1%** | 95.6% |
+        | **R²** | 0.608 |
+        | **MAE** | 0.502% SiO₂ |
+        | **Within ±1%** | 89.0% |
 
         ### Data Source
         [Quality Prediction in a Mining Process](https://www.kaggle.com/datasets/edumagalhaes/quality-prediction-in-a-mining-process)  
@@ -668,7 +681,10 @@ elif page == "📋 About":
         `Pandas` `NumPy` `Matplotlib`
 
         ### Limitations
-        - % Iron Concentrate is a lab assay, so in true real-time deployment it would need its own soft sensor
-        - Residual underprediction bias of ~0.08% SiO₂
-        - Trained on one plant's data, meaning retraining is needed for other sites
+        - Concurrent % Iron Concentrate removed to fix data leakage — Iron Concentrate lags (2h, 4h) retained as anchors
+        - % Iron Feed and % Silica Feed retained under slow-variation assumption — may need lagging in plants with rapid ore type transitions
+        - Silica_lag_1 dominates predictions (SHAP 0.612) — model is anchored to the last known lab result with hardware sensors providing incremental adjustment
+        - Prediction range compressed [1.12, 4.53] vs actual [0.66, 5.49] — model undersells extreme silica events
+        - Static model subject to concept drift — requires retraining when ore mineralogy or sensor calibration changes
+        - Trained on one plant's data — retraining needed for other sites
         """)

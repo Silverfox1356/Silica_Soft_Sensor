@@ -159,7 +159,7 @@ st.sidebar.markdown("---")
 
 page = st.sidebar.radio(
     "Navigation",
-    ["🔬 Predict", "📊 Model Performance", "🔍 Feature Importance", "📋 About"],
+    ["🔬 Predict", "📁 Batch Predict", "📊 Model Performance", "🔍 Feature Importance", "📋 About"],
     label_visibility="collapsed"
 )
 
@@ -443,6 +443,76 @@ if page == "🔬 Predict":
             st.info("SHAP explanation unavailable — check model file.")
 
 # ════════════════════════════════════════
+# PAGE 1.5 — BATCH PREDICT
+# ════════════════════════════════════════
+elif page == "📁 Batch Predict":
+    st.markdown("## CSV Batch Prediction")
+    st.markdown("Upload a CSV file containing historical sensor readings to generate bulk predictions.")
+    st.markdown("---")
+
+    # File uploader
+    uploaded_file = st.file_uploader("Upload CSV file (must contain process sensor columns)", type=['csv'])
+
+    if uploaded_file is not None:
+        try:
+            # Read the uploaded CSV
+            df_upload = pd.read_csv(uploaded_file)
+            st.success(f"✓ File loaded successfully: {len(df_upload)} rows found.")
+            
+            # Create a working copy for model input
+            df_process = df_upload.copy()
+            
+            # Ensure all required features exist
+            missing_cols = [col for col in FEATURES if col not in df_process.columns]
+            if missing_cols:
+                st.warning(f"⚠ Missing {len(missing_cols)} required columns. Filling with default values to allow prediction.")
+                for col in missing_cols:
+                    # Use engineering default if available, otherwise standard default, otherwise 0
+                    df_process[col] = ENG_DEFAULTS.get(col, DEFAULTS.get(col, 0.0))
+            
+            # Extract features in the exact order the models expect
+            X_batch = df_process[FEATURES].values
+            
+            with st.spinner("Generating predictions..."):
+                # Fast standard predictions for batch (skipping confidence intervals for speed)
+                rf_preds   = rf_model.predict(X_batch)
+                xgb_preds  = xgb_model.predict(X_batch)
+                
+                # Lasso requires scaling
+                X_batch_sc = scaler.transform(X_batch)
+                lasso_preds = lasso_model.predict(X_batch_sc)
+                
+            # Append predictions to the ORIGINAL uploaded dataframe
+            results_df = df_upload.copy()
+            results_df.insert(0, 'Predicted % SiO₂ (XGBoost)', xgb_preds)
+            results_df.insert(0, 'Predicted % SiO₂ (Lasso)', lasso_preds)
+            results_df.insert(0, 'Predicted % SiO₂ (Random Forest)', rf_preds)
+            
+            # Formatting to 3 decimal places for cleanliness
+            results_df['Predicted % SiO₂ (Random Forest)'] = results_df['Predicted % SiO₂ (Random Forest)'].round(3)
+            results_df['Predicted % SiO₂ (Lasso)'] = results_df['Predicted % SiO₂ (Lasso)'].round(3)
+            results_df['Predicted % SiO₂ (XGBoost)'] = results_df['Predicted % SiO₂ (XGBoost)'].round(3)
+
+            st.markdown('<p class="section-header">Prediction Preview</p>', unsafe_allow_html=True)
+            st.dataframe(results_df.head(15), use_container_width=True)
+
+            # Convert to CSV for download
+            csv_export = results_df.to_csv(index=False).encode('utf-8')
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.download_button(
+                label="📥 Download Complete Results",
+                data=csv_export,
+                file_name="silica_batch_predictions.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+
+        except Exception as e:
+            st.error(f"Error processing file: {str(e)}")
+            st.info("Please ensure the uploaded file is a valid CSV formatted with the correct sensor column names.")
+
+# ════════════════════════════════════════
 # PAGE 2 — MODEL PERFORMANCE
 # ════════════════════════════════════════
 elif page == "📊 Model Performance":
@@ -571,7 +641,7 @@ elif page == "🔍 Feature Importance":
         """)
 
 # ════════════════════════════════════════
-# PAGE 4 — ABOUT
+# PAGE 4 - ABOUT
 # ════════════════════════════════════════
 elif page == "📋 About":
     st.markdown("## About This Project")
@@ -584,25 +654,25 @@ elif page == "📋 About":
         ### Problem
         In iron ore froth flotation, silica (SiO₂) impurity in the final concentrate is measured
         by lab assay every 2 hours. That delay means operators are reacting to quality problems
-        that occurred hours ago — too late to prevent off-specification product from reaching
+        that occurred hours ago, which is too late to prevent off-specification product from reaching
         downstream blast furnace operations.
 
         ### Solution
         A data-driven soft sensor that predicts % SiO₂ in real time from continuously available
-        process sensor readings — air flows, reagent dosing, column levels, and ore pulp
-        properties — replacing the slow lab feedback loop with immediate inference.
+        process sensor readings like air flows, reagent dosing, column levels, and ore pulp
+        properties. This replaces the slow lab feedback loop with immediate inference.
 
         ### Methodology
-        - **Dataset**: 737,453 rows of 20-second sensor data (March–September 2017), resampled to 2-hour intervals to align with lab measurement cadence
-        - **Models**: Lasso Regression, Random Forest, XGBoost — compared against a rolling mean baseline
+        - **Dataset**: 737,453 rows of 20-second sensor data (March-September 2017), resampled to 2-hour intervals to align with lab measurement cadence
+        - **Models**: Lasso Regression, Random Forest, and XGBoost, compared against a rolling mean baseline
         - **Feature engineering**: Lag features (process memory), rolling statistics (process stability), interaction terms (reagent chemistry)
         - **Hyperparameter tuning**: Bayesian optimisation via Optuna with TimeSeriesSplit cross-validation
         - **Explainability**: SHAP TreeExplainer for prediction-level interpretation
-        - **Validation**: Strict chronological 80/20 split — no shuffling, no future data leakage
+        - **Validation**: Strict chronological 80/20 split with no shuffling and no future data leakage
 
         ### Key Result
         Lasso Regression achieved the best performance with **R² = 0.825**, **MAE = 0.347% SiO₂**,
-        with **95.6%** of predictions falling within ±1% SiO₂ of actual lab measurements —
+        with **95.6%** of predictions falling within ±1% SiO₂ of actual lab measurements,
         compared to a conventional rolling mean baseline of R² = 0.42.
         """)
 
@@ -622,7 +692,7 @@ elif page == "📋 About":
 
         ### Data Source
         [Quality Prediction in a Mining Process](https://www.kaggle.com/datasets/edumagalhaes/quality-prediction-in-a-mining-process)  
-        Kaggle — edumagalhaes
+        Kaggle (edumagalhaes)
 
         ### Tech Stack
         `Python` `scikit-learn` `XGBoost`  
@@ -630,7 +700,7 @@ elif page == "📋 About":
         `Pandas` `NumPy` `Matplotlib`
 
         ### Limitations
-        - % Iron Concentrate is a lab assay — in true real-time deployment it would need its own soft sensor
+        - % Iron Concentrate is a lab assay, so in true real-time deployment it would need its own soft sensor
         - Residual underprediction bias of ~0.08% SiO₂
-        - Trained on one plant's data — retraining needed for other sites
+        - Trained on one plant's data, meaning retraining is needed for other sites
         """)

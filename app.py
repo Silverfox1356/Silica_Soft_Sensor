@@ -245,42 +245,45 @@ if page == "🔬 Predict":
                 default   = float(DEFAULTS.get(col, (lo + hi) / 2))
                 s_min     = round(float(lo) * 0.8, 2)
                 s_max     = round(float(hi) * 1.2, 2)
+                step      = round((s_max - s_min) / 200, 3)
                 key_state = f"val_{col}"
 
                 # Initialise session state on first load
                 if key_state not in st.session_state:
                     st.session_state[key_state] = default
 
-                # Slider on top
-                slider_val = st.slider(
+                # Callback: slider changed → update shared state
+                def on_slider(k=key_state, sk=f"sl_{col}"):
+                    st.session_state[k] = st.session_state[sk]
+
+                # Callback: number input changed → update shared state
+                def on_number(k=key_state, nk=f"ni_{col}"):
+                    st.session_state[k] = st.session_state[nk]
+
+                # Slider — reads from shared state, writes back via callback
+                st.slider(
                     col,
                     min_value=s_min,
                     max_value=s_max,
                     value=float(st.session_state[key_state]),
                     key=f"sl_{col}",
+                    on_change=on_slider,
                 )
 
-                # Number input below — always reflects slider value
-                step = round((s_max - s_min) / 200, 3)
-                num_val = st.number_input(
+                # Number input — also reads from shared state, writes back via callback
+                st.number_input(
                     "Manual entry",
                     min_value=s_min,
                     max_value=s_max,
-                    value=float(slider_val),
+                    value=float(st.session_state[key_state]),
                     step=step,
                     format="%.2f",
                     key=f"ni_{col}",
+                    on_change=on_number,
                     label_visibility="collapsed",
                 )
 
-                # Sync: if number input was changed manually, update state and rerun
-                if abs(num_val - slider_val) > 1e-6:
-                    st.session_state[key_state] = num_val
-                    st.rerun()
-                else:
-                    st.session_state[key_state] = slider_val
-
-                inputs[col] = st.session_state[key_state]
+                inputs[col] = float(st.session_state[key_state])
                 if inputs[col] < lo or inputs[col] > hi:
                     out_of_range.append(col)
 

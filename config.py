@@ -54,6 +54,5 @@ ENG_DEFAULTS = {
 
 FEED_COLS    = ['% Iron Feed', '% Silica Feed', 'Ore Pulp Flow', 'Ore Pulp pH']
 REAGENT_COLS = ['Starch Flow', 'Amina Flow']
-# New category for the Lab History Tab
-HISTORY_COLS = ['Silica_lag_1', 'Iron_Concentrate_lag1']
+HISTORY_COLS = ['Silica_lag_1', 'Iron_Concentrate_lag1']  # <-- This was the missing line!
 OTHER_COLS   = []

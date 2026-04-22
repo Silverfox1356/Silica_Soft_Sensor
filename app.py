@@ -357,7 +357,7 @@ if page == "🔬 Predict":
             font={'color': '#e8eaf0'},
             xaxis={'tickfont': {'color': '#e8eaf0'}, 'gridcolor': '#2a2d3a'},
             yaxis={'tickfont': {'color': '#8b8fa8'}, 'gridcolor': '#2a2d3a',
-                   'title': '% SiO₂', 'titlefont': {'color': '#8b8fa8', 'size': 9}},
+                   'title': {'text': '% SiO₂', 'font': {'color': '#8b8fa8', 'size': 9}}},
             showlegend=False,
         )
         st.plotly_chart(fig_comp, use_container_width=True)
@@ -386,9 +386,9 @@ if page == "🔬 Predict":
                 height=180, margin=dict(t=20, b=20, l=10, r=10),
                 paper_bgcolor='#1a1d27', plot_bgcolor='#1a1d27',
                 font={'color': '#e8eaf0'},
-                xaxis={'title': 'Reading', 'titlefont': {'size': 9, 'color': '#8b8fa8'},
+                xaxis={'title': {'text': 'Reading', 'font': {'size': 9, 'color': '#8b8fa8'}},
                        'tickfont': {'color': '#8b8fa8'}, 'gridcolor': '#2a2d3a'},
-                yaxis={'title': '% SiO₂', 'titlefont': {'size': 9, 'color': '#8b8fa8'},
+                yaxis={'title': {'text': '% SiO₂', 'font': {'size': 9, 'color': '#8b8fa8'}},
                        'tickfont': {'color': '#8b8fa8'}, 'gridcolor': '#2a2d3a'},
                 showlegend=False,
             )
@@ -510,7 +510,7 @@ elif page == "🔍 Feature Importance":
         height=380, margin=dict(t=20, b=20, l=10, r=60),
         paper_bgcolor='#1a1d27', plot_bgcolor='#1a1d27',
         font={'color': '#e8eaf0'},
-        xaxis={'title': 'Mean |SHAP Value|', 'titlefont': {'color': '#8b8fa8', 'size': 10},
+        xaxis={'title': {'text': 'Mean |SHAP Value|', 'font': {'color': '#8b8fa8', 'size': 10}},
                'tickfont': {'color': '#8b8fa8'}, 'gridcolor': '#2a2d3a'},
         yaxis={'tickfont': {'color': '#e8eaf0', 'size': 10}, 'gridcolor': '#2a2d3a'},
         title={'text': 'Top 10 Features — XGBoost SHAP Importance',

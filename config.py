@@ -19,7 +19,10 @@ BOUNDS = {
     'Flotation Column 05 Level':     (214.7, 674.1),
     'Flotation Column 06 Level':     (203.7, 698.5),
     'Flotation Column 07 Level':     (185.1, 655.5),
-    # % Iron Concentrate removed — concurrent lab assay, not available at prediction time
+    
+    # Historical Lab Data Bounds (used as model anchors)
+    'Silica_lag_1':                  (0.5,   6.0),
+    'Iron_Concentrate_lag1':         (60.0,  70.0),
 }
 
 DEFAULTS = {
@@ -31,12 +34,15 @@ DEFAULTS = {
     'Flotation Column 02 Level': 522.6,  'Flotation Column 03 Level': 531.4,
     'Flotation Column 04 Level': 420.3,  'Flotation Column 05 Level': 425.3,
     'Flotation Column 06 Level': 429.9,  'Flotation Column 07 Level': 421.0,
-    # % Iron Concentrate removed — concurrent lab assay, not available at prediction time
+    
+    # Historical Lab Data Defaults
+    'Silica_lag_1': 2.33,
+    'Iron_Concentrate_lag1': 65.05,
 }
 
 ENG_DEFAULTS = {
-    'Silica_lag_1': 2.33, 'Silica_lag_2': 2.33,
-    'Iron_Concentrate_lag1': 65.05, 'Iron_Concentrate_lag2': 65.05,
+    'Silica_lag_2': 2.33,
+    'Iron_Concentrate_lag2': 65.05,
     'Amina Flow_lag1': 488.1, 'Starch Flow_lag1': 2869.0,
     'Flotation Column 01 Air Flow_lag1': 280.2,
     'Flotation Column 01 Air Flow_roll_mean3': 280.2,
@@ -48,4 +54,6 @@ ENG_DEFAULTS = {
 
 FEED_COLS    = ['% Iron Feed', '% Silica Feed', 'Ore Pulp Flow', 'Ore Pulp pH']
 REAGENT_COLS = ['Starch Flow', 'Amina Flow']
-OTHER_COLS   = []  # % Iron Concentrate removed — concurrent lab assay, not available at prediction time
+# New category for the Lab History Tab
+HISTORY_COLS = ['Silica_lag_1', 'Iron_Concentrate_lag1']
+OTHER_COLS   = []

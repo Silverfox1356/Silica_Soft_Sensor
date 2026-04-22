@@ -19,7 +19,7 @@ BOUNDS = {
     'Flotation Column 05 Level':     (214.7, 674.1),
     'Flotation Column 06 Level':     (203.7, 698.5),
     'Flotation Column 07 Level':     (185.1, 655.5),
-    '% Iron Concentrate':            (62.05, 68.01),
+    # % Iron Concentrate removed — concurrent lab assay, not available at prediction time
 }
 
 DEFAULTS = {
@@ -31,7 +31,7 @@ DEFAULTS = {
     'Flotation Column 02 Level': 522.6,  'Flotation Column 03 Level': 531.4,
     'Flotation Column 04 Level': 420.3,  'Flotation Column 05 Level': 425.3,
     'Flotation Column 06 Level': 429.9,  'Flotation Column 07 Level': 421.0,
-    '% Iron Concentrate': 65.05,
+    # % Iron Concentrate removed — concurrent lab assay, not available at prediction time
 }
 
 ENG_DEFAULTS = {
@@ -48,4 +48,4 @@ ENG_DEFAULTS = {
 
 FEED_COLS    = ['% Iron Feed', '% Silica Feed', 'Ore Pulp Flow', 'Ore Pulp pH']
 REAGENT_COLS = ['Starch Flow', 'Amina Flow']
-OTHER_COLS   = ['% Iron Concentrate']
+OTHER_COLS   = []  # % Iron Concentrate removed — concurrent lab assay, not available at prediction time

@@ -5,6 +5,7 @@ import joblib
 import shap
 import matplotlib.pyplot as plt
 import matplotlib
+import plotly.graph_objects as go
 matplotlib.use('Agg')
 
 # ── Page config ──────────────────────────────────────────────────
@@ -28,12 +29,12 @@ h1, h2, h3 { font-family: 'IBM Plex Mono', monospace; }
     background: #1a1d27;
     border: 1px solid #2a2d3a;
     border-radius: 8px;
-    padding: 1.2rem 1.5rem;
+    padding: 1rem 1.2rem;
     text-align: center;
     margin-bottom: 0.5rem;
 }
-.metric-value { font-family: 'IBM Plex Mono', monospace; font-size: 2.2rem; font-weight: 600; }
-.metric-label { font-size: 0.75rem; color: #8b8fa8; letter-spacing: 0.1em; text-transform: uppercase; margin-top: 0.3rem; }
+.metric-value { font-family: 'IBM Plex Mono', monospace; font-size: 1.9rem; font-weight: 600; }
+.metric-label { font-size: 0.72rem; color: #8b8fa8; letter-spacing: 0.1em; text-transform: uppercase; margin-top: 0.3rem; }
 
 .warning-box {
     background: #2a1f00;
@@ -46,28 +47,51 @@ h1, h2, h3 { font-family: 'IBM Plex Mono', monospace; }
 }
 .section-header {
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     letter-spacing: 0.15em;
     color: #8b8fa8;
     text-transform: uppercase;
     border-bottom: 1px solid #2a2d3a;
     padding-bottom: 0.4rem;
-    margin-bottom: 1rem;
+    margin-bottom: 0.8rem;
     margin-top: 1rem;
 }
-div[data-testid="stNumberInput"] label { font-size: 0.78rem !important; color: #a0a3b1 !important; }
+.model-badge {
+    display: inline-block;
+    background: #1a1d27;
+    border: 1px solid #2a2d3a;
+    border-radius: 20px;
+    padding: 0.25rem 0.8rem;
+    font-size: 0.78rem;
+    font-family: 'IBM Plex Mono', monospace;
+    margin-right: 0.4rem;
+    margin-bottom: 0.4rem;
+}
+/* Override Streamlit slider track colour */
+div[data-testid="stSlider"] .st-emotion-cache-1inwz65 { background: #4ade80; }
+div[data-testid="stNumberInput"] label,
+div[data-testid="stSlider"] label { font-size: 0.78rem !important; color: #a0a3b1 !important; }
 </style>
 """, unsafe_allow_html=True)
 
 # ── Load artifacts ───────────────────────────────────────────────
 @st.cache_resource
 def load_artifacts():
-    model    = joblib.load('models/rf_silica_model.pkl')
+    rf     = joblib.load('models/rf_silica_model.pkl')
+    lasso  = joblib.load('models/lasso_silica_model.pkl')
+    xgb    = joblib.load('models/xgb_silica_model.pkl')
+    scaler = joblib.load('models/scaler.pkl')
     features = pd.read_csv('data/feature_list.csv')['feature'].tolist()
     metrics  = pd.read_csv('data/model_metrics.csv', index_col=0)
-    return model, features, metrics
+    return rf, lasso, xgb, scaler, features, metrics
 
-model, FEATURES, metrics_df = load_artifacts()
+rf_model, lasso_model, xgb_model, scaler, FEATURES, metrics_df = load_artifacts()
+
+MODELS = {
+    'Random Forest': rf_model,
+    'Lasso':         lasso_model,
+    'XGBoost':       xgb_model,
+}
 
 # ── Constants ────────────────────────────────────────────────────
 BOUNDS = {
@@ -122,7 +146,13 @@ AIR_COLS     = [f for f in FEATURES if 'Air Flow' in f and 'lag' not in f and 'r
 LEVEL_COLS   = [f for f in FEATURES if 'Level' in f and 'lag' not in f and 'roll' not in f]
 OTHER_COLS   = ['% Iron Concentrate']
 
-# ── Sidebar — navigation + settings only ────────────────────────
+# ── Session state ────────────────────────────────────────────────
+if 'trend' not in st.session_state:
+    st.session_state.trend = []
+if 'reset' not in st.session_state:
+    st.session_state.reset = False
+
+# ── Sidebar ──────────────────────────────────────────────────────
 st.sidebar.markdown("## ⚗️ Silica Soft Sensor")
 st.sidebar.markdown("*Iron ore froth flotation quality prediction*")
 st.sidebar.markdown("---")
@@ -134,66 +164,125 @@ page = st.sidebar.radio(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.markdown('<p style="font-size:0.7rem;color:#8b8fa8;letter-spacing:0.1em;text-transform:uppercase;">Settings</p>', unsafe_allow_html=True)
-SPEC_LIMIT = st.sidebar.number_input("Spec limit (% SiO₂)", min_value=0.5, max_value=5.0,
-                                      value=2.0, step=0.1, format="%.1f")
+st.sidebar.markdown('<p style="font-size:0.7rem;color:#8b8fa8;letter-spacing:0.1em;text-transform:uppercase;">Settings</p>',
+                    unsafe_allow_html=True)
+SPEC_LIMIT = st.sidebar.number_input("Spec limit (% SiO₂)", min_value=0.5,
+                                      max_value=5.0, value=2.0, step=0.1, format="%.1f")
 st.sidebar.markdown("---")
 st.sidebar.markdown('<p style="font-size:0.72rem;color:#475569;">CL653 · IIT Guwahati<br>Rishav Kumar · 230107057</p>',
                     unsafe_allow_html=True)
 
-# Session state for trend
-if 'trend' not in st.session_state:
-    st.session_state.trend = []
+# ── Helper: gauge chart ──────────────────────────────────────────
+def make_gauge(pred, spec_limit):
+    max_val = max(spec_limit * 2.5, pred * 1.2, 5.5)
+    if pred > spec_limit:
+        bar_color = "#f87171"
+    elif pred > spec_limit * 0.9:
+        bar_color = "#fbbf24"
+    else:
+        bar_color = "#4ade80"
+
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=pred,
+        number={'suffix': "%", 'font': {'size': 28, 'color': bar_color,
+                                         'family': 'IBM Plex Mono'}},
+        gauge={
+            'axis': {'range': [0, max_val], 'tickwidth': 1,
+                     'tickcolor': "#8b8fa8", 'tickfont': {'color': '#8b8fa8', 'size': 10}},
+            'bar': {'color': bar_color, 'thickness': 0.25},
+            'bgcolor': "#1a1d27",
+            'borderwidth': 0,
+            'steps': [
+                {'range': [0, spec_limit * 0.9],          'color': '#1a2e1a'},
+                {'range': [spec_limit * 0.9, spec_limit],  'color': '#2a2200'},
+                {'range': [spec_limit, max_val],           'color': '#2a1515'},
+            ],
+            'threshold': {
+                'line': {'color': "#f87171", 'width': 2},
+                'thickness': 0.75,
+                'value': spec_limit
+            }
+        }
+    ))
+    fig.update_layout(
+        height=220, margin=dict(t=20, b=10, l=20, r=20),
+        paper_bgcolor='#1a1d27', font={'color': '#e8eaf0'},
+    )
+    return fig
+
+# ── Helper: RF confidence interval ──────────────────────────────
+def rf_confidence(model, X_in):
+    tree_preds = np.array([tree.predict(X_in)[0] for tree in model.estimators_])
+    return tree_preds.mean(), tree_preds.std()
 
 # ════════════════════════════════════════
 # PAGE 1 — PREDICT
 # ════════════════════════════════════════
 if page == "🔬 Predict":
     st.markdown("## Silica Concentration Prediction")
-    st.markdown("Enter current sensor readings on the left. Prediction updates instantly.")
+    st.markdown("Adjust sensor readings on the left. All outputs update instantly.")
     st.markdown("---")
 
     col_inputs, col_results = st.columns([1, 1], gap="large")
 
-    # ── LEFT: Sensor inputs ──────────────────────────────────────
+    # ── LEFT: Sensor inputs with sliders ────────────────────────
     with col_inputs:
         inputs = {}
         out_of_range = []
 
-        def render_inputs(cols, label):
+        # Reset button
+        if st.button("↺ Reset to defaults", use_container_width=True):
+            st.session_state.reset = True
+            st.rerun()
+
+        def render_sliders(cols, label):
             st.markdown(f'<p class="section-header">{label}</p>', unsafe_allow_html=True)
             for col in cols:
                 if col not in FEATURES:
                     continue
-                lo, hi = BOUNDS.get(col, (0.0, 1000.0))
-                val = st.number_input(
+                lo, hi    = BOUNDS.get(col, (0.0, 1000.0))
+                default   = float(DEFAULTS.get(col, (lo + hi) / 2))
+                # Use wider range for slider but mark operating bounds
+                val = st.slider(
                     col,
-                    min_value=float(lo) * 0.5,
-                    max_value=float(hi) * 1.5,
-                    value=float(DEFAULTS.get(col, (lo + hi) / 2)),
-                    format="%.2f",
-                    key=col
+                    min_value=round(float(lo) * 0.8, 2),
+                    max_value=round(float(hi) * 1.2, 2),
+                    value=default,
+                    key=f"sl_{col}"
                 )
                 inputs[col] = val
                 if val < lo or val > hi:
                     out_of_range.append(col)
 
-        render_inputs(FEED_COLS,    "Feed & Pulp")
-        render_inputs(REAGENT_COLS, "Reagents")
-        render_inputs(AIR_COLS,     "Air Flow")
-        render_inputs(LEVEL_COLS,   "Column Levels")
-        render_inputs(OTHER_COLS,   "Concentrate")
+        render_sliders(FEED_COLS,    "Feed & Pulp")
+        render_sliders(REAGENT_COLS, "Reagents")
+        render_sliders(AIR_COLS,     "Air Flow")
+        render_sliders(LEVEL_COLS,   "Column Levels")
+        render_sliders(OTHER_COLS,   "Concentrate")
 
     # ── RIGHT: Results ───────────────────────────────────────────
     with col_results:
 
-        # Fill engineered features with defaults
+        # Fill engineered features
         for feat in FEATURES:
             if feat not in inputs:
                 inputs[feat] = ENG_DEFAULTS.get(feat, 0.0)
 
-        X_in = np.array([inputs[f] for f in FEATURES]).reshape(1, -1)
-        pred = float(model.predict(X_in)[0])
+        X_in_raw = np.array([inputs[f] for f in FEATURES]).reshape(1, -1)
+
+        # RF prediction + confidence
+        rf_pred, rf_std = rf_confidence(rf_model, X_in_raw)
+        rf_lo = rf_pred - 1.96 * rf_std
+        rf_hi = rf_pred + 1.96 * rf_std
+
+        # Lasso needs scaled input
+        X_in_sc = scaler.transform(X_in_raw)
+        lasso_pred = float(lasso_model.predict(X_in_sc)[0])
+        xgb_pred   = float(xgb_model.predict(X_in_raw)[0])
+
+        # Primary prediction = RF
+        pred = rf_pred
 
         if pred > SPEC_LIMIT:
             pred_color = "#f87171"
@@ -205,22 +294,27 @@ if page == "🔬 Predict":
             pred_color = "#4ade80"
             alert_text = "✓ WITHIN SPECIFICATION"
 
-        # Prediction cards
-        st.markdown('<p class="section-header">Prediction</p>', unsafe_allow_html=True)
+        # Gauge
+        st.markdown('<p class="section-header">Predicted % SiO₂</p>', unsafe_allow_html=True)
+        st.plotly_chart(make_gauge(pred, SPEC_LIMIT), use_container_width=True)
+
+        # Alert + confidence
         c1, c2 = st.columns(2)
         with c1:
             st.markdown(f"""
             <div class="metric-card" style="border-color:{pred_color}">
-                <div class="metric-value" style="color:{pred_color}">{pred:.3f}%</div>
-                <div class="metric-label">Predicted % SiO₂</div>
-            </div>""", unsafe_allow_html=True)
-        with c2:
-            st.markdown(f"""
-            <div class="metric-card" style="border-color:{pred_color}">
-                <div class="metric-value" style="color:{pred_color};font-size:1.0rem;padding-top:0.8rem">
+                <div class="metric-value" style="color:{pred_color};font-size:1.0rem;padding:0.5rem 0">
                     {alert_text}
                 </div>
                 <div class="metric-label">Spec limit: {SPEC_LIMIT:.1f}%</div>
+            </div>""", unsafe_allow_html=True)
+        with c2:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-value" style="color:#a78bfa;font-size:1.1rem;padding:0.3rem 0">
+                    [{rf_lo:.2f}, {rf_hi:.2f}]
+                </div>
+                <div class="metric-label">95% Confidence Interval</div>
             </div>""", unsafe_allow_html=True)
 
         if out_of_range:
@@ -230,6 +324,44 @@ if page == "🔬 Predict":
                 {', '.join(out_of_range)}
             </div>""", unsafe_allow_html=True)
 
+        # Model comparison
+        st.markdown('<p class="section-header">Model Comparison</p>', unsafe_allow_html=True)
+        comp_df = pd.DataFrame({
+            'Model': ['Lasso', 'Random Forest', 'XGBoost'],
+            'Prediction (% SiO₂)': [round(lasso_pred, 3), round(rf_pred, 3), round(xgb_pred, 3)]
+        })
+        fig_comp = go.Figure()
+        colors_comp = []
+        for p in [lasso_pred, rf_pred, xgb_pred]:
+            if p > SPEC_LIMIT:
+                colors_comp.append('#f87171')
+            elif p > SPEC_LIMIT * 0.9:
+                colors_comp.append('#fbbf24')
+            else:
+                colors_comp.append('#4ade80')
+
+        fig_comp.add_trace(go.Bar(
+            x=comp_df['Model'],
+            y=comp_df['Prediction (% SiO₂)'],
+            marker_color=colors_comp,
+            text=[f"{v:.3f}%" for v in comp_df['Prediction (% SiO₂)']],
+            textposition='outside',
+            textfont={'color': '#e8eaf0', 'size': 11, 'family': 'IBM Plex Mono'},
+        ))
+        fig_comp.add_hline(y=SPEC_LIMIT, line_dash='dash', line_color='#f87171',
+                           annotation_text=f"Spec ({SPEC_LIMIT}%)",
+                           annotation_font_color='#f87171', annotation_font_size=10)
+        fig_comp.update_layout(
+            height=200, margin=dict(t=30, b=10, l=10, r=10),
+            paper_bgcolor='#1a1d27', plot_bgcolor='#1a1d27',
+            font={'color': '#e8eaf0'},
+            xaxis={'tickfont': {'color': '#e8eaf0'}, 'gridcolor': '#2a2d3a'},
+            yaxis={'tickfont': {'color': '#8b8fa8'}, 'gridcolor': '#2a2d3a',
+                   'title': '% SiO₂', 'titlefont': {'color': '#8b8fa8', 'size': 9}},
+            showlegend=False,
+        )
+        st.plotly_chart(fig_comp, use_container_width=True)
+
         # Trend
         st.markdown('<p class="section-header">Prediction Trend</p>', unsafe_allow_html=True)
         if st.button("📌 Log this prediction", use_container_width=True):
@@ -238,26 +370,32 @@ if page == "🔬 Predict":
                 st.session_state.trend.pop(0)
 
         if len(st.session_state.trend) >= 2:
-            fig2, ax2 = plt.subplots(figsize=(5, 2.5))
-            fig2.patch.set_facecolor('#1a1d27')
-            ax2.set_facecolor('#1a1d27')
-            ax2.plot(range(1, len(st.session_state.trend) + 1),
-                     st.session_state.trend,
-                     color='#60a5fa', lw=2, marker='o', markersize=4)
-            ax2.axhline(y=SPEC_LIMIT, color='#f87171', lw=1,
-                        linestyle='--', label=f'Spec ({SPEC_LIMIT}%)')
-            ax2.set_xlabel('Reading', color='#8b8fa8', fontsize=8)
-            ax2.set_ylabel('% SiO₂', color='#8b8fa8', fontsize=8)
-            ax2.tick_params(colors='#8b8fa8', labelsize=7)
-            for spine in ax2.spines.values():
-                spine.set_edgecolor('#2a2d3a')
-            ax2.legend(fontsize=7, labelcolor='#e8eaf0', facecolor='#1a1d27')
-            plt.tight_layout()
-            st.pyplot(fig2)
-            plt.close()
+            fig_trend = go.Figure()
+            fig_trend.add_trace(go.Scatter(
+                x=list(range(1, len(st.session_state.trend) + 1)),
+                y=st.session_state.trend,
+                mode='lines+markers',
+                line={'color': '#60a5fa', 'width': 2},
+                marker={'size': 6, 'color': '#60a5fa'},
+                name='Silica %'
+            ))
+            fig_trend.add_hline(y=SPEC_LIMIT, line_dash='dash', line_color='#f87171',
+                                annotation_text=f"Spec ({SPEC_LIMIT}%)",
+                                annotation_font_color='#f87171', annotation_font_size=9)
+            fig_trend.update_layout(
+                height=180, margin=dict(t=20, b=20, l=10, r=10),
+                paper_bgcolor='#1a1d27', plot_bgcolor='#1a1d27',
+                font={'color': '#e8eaf0'},
+                xaxis={'title': 'Reading', 'titlefont': {'size': 9, 'color': '#8b8fa8'},
+                       'tickfont': {'color': '#8b8fa8'}, 'gridcolor': '#2a2d3a'},
+                yaxis={'title': '% SiO₂', 'titlefont': {'size': 9, 'color': '#8b8fa8'},
+                       'tickfont': {'color': '#8b8fa8'}, 'gridcolor': '#2a2d3a'},
+                showlegend=False,
+            )
+            st.plotly_chart(fig_trend, use_container_width=True)
         else:
             st.markdown("""
-            <div style="color:#8b8fa8;font-size:0.82rem;padding:1rem 0;text-align:center;">
+            <div style="color:#8b8fa8;font-size:0.82rem;padding:0.8rem 0;text-align:center;">
                 Log 2+ predictions to see the trend chart.
             </div>""", unsafe_allow_html=True)
 
@@ -265,17 +403,17 @@ if page == "🔬 Predict":
         st.markdown('<p class="section-header">SHAP — What drove this prediction</p>',
                     unsafe_allow_html=True)
         try:
-            explainer = shap.TreeExplainer(model)
-            shap_vals = explainer(X_in)
-            fig, ax   = plt.subplots(figsize=(6, 4))
-            fig.patch.set_facecolor('#1a1d27')
+            explainer = shap.TreeExplainer(rf_model)
+            shap_vals = explainer(X_in_raw)
+            fig_shap, ax = plt.subplots(figsize=(6, 4))
+            fig_shap.patch.set_facecolor('#1a1d27')
             ax.set_facecolor('#1a1d27')
             shap.plots.waterfall(shap_vals[0], max_display=10, show=False)
             plt.gcf().patch.set_facecolor('#1a1d27')
             for text in plt.gcf().findobj(plt.Text):
                 text.set_color('#e8eaf0')
             plt.tight_layout()
-            st.pyplot(fig)
+            st.pyplot(fig_shap)
             plt.close()
         except Exception:
             st.info("SHAP explanation unavailable — check model file.")
@@ -355,21 +493,31 @@ elif page == "🔍 Feature Importance":
         'Silica_delta':                            0.017,
     }
 
-    shap_df = pd.Series(top_features).sort_values()
-    fig3, ax3 = plt.subplots(figsize=(9, 5))
-    fig3.patch.set_facecolor('#1a1d27')
-    ax3.set_facecolor('#1a1d27')
+    shap_series = pd.Series(top_features).sort_values()
     colors = ['#f87171' if v > 0.1 else '#60a5fa' if v > 0.02 else '#475569'
-              for v in shap_df.values]
-    ax3.barh(shap_df.index, shap_df.values, color=colors, edgecolor='none', height=0.6)
-    ax3.set_xlabel('Mean |SHAP Value|', color='#8b8fa8', fontsize=9)
-    ax3.tick_params(colors='#e8eaf0', labelsize=8)
-    for spine in ax3.spines.values():
-        spine.set_edgecolor('#2a2d3a')
-    ax3.set_title('Top 10 Features — XGBoost SHAP Importance', color='#e8eaf0', fontsize=10)
-    plt.tight_layout()
-    st.pyplot(fig3)
-    plt.close()
+              for v in shap_series.values]
+
+    fig_shap = go.Figure(go.Bar(
+        x=shap_series.values,
+        y=shap_series.index,
+        orientation='h',
+        marker_color=colors,
+        text=[f"{v:.3f}" for v in shap_series.values],
+        textposition='outside',
+        textfont={'color': '#e8eaf0', 'size': 10},
+    ))
+    fig_shap.update_layout(
+        height=380, margin=dict(t=20, b=20, l=10, r=60),
+        paper_bgcolor='#1a1d27', plot_bgcolor='#1a1d27',
+        font={'color': '#e8eaf0'},
+        xaxis={'title': 'Mean |SHAP Value|', 'titlefont': {'color': '#8b8fa8', 'size': 10},
+               'tickfont': {'color': '#8b8fa8'}, 'gridcolor': '#2a2d3a'},
+        yaxis={'tickfont': {'color': '#e8eaf0', 'size': 10}, 'gridcolor': '#2a2d3a'},
+        title={'text': 'Top 10 Features — XGBoost SHAP Importance',
+               'font': {'color': '#e8eaf0', 'size': 12, 'family': 'IBM Plex Mono'}},
+        showlegend=False,
+    )
+    st.plotly_chart(fig_shap, use_container_width=True)
 
     st.markdown("---")
     st.markdown('<p class="section-header">Engineering Interpretation</p>', unsafe_allow_html=True)
@@ -460,7 +608,7 @@ elif page == "📋 About":
 
         ### Tech Stack
         `Python` `scikit-learn` `XGBoost`  
-        `SHAP` `Optuna` `Streamlit`  
+        `SHAP` `Optuna` `Streamlit` `Plotly`  
         `Pandas` `NumPy` `Matplotlib`
 
         ### Limitations

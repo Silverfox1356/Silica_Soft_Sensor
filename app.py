@@ -246,44 +246,48 @@ if page == "🔬 Predict":
                 s_min     = round(float(lo) * 0.8, 2)
                 s_max     = round(float(hi) * 1.2, 2)
                 step      = round((s_max - s_min) / 200, 3)
-                key_state = f"val_{col}"
+                
+                # Define keys for the two widgets
+                sl_key = f"sl_{col}"
+                ni_key = f"ni_{col}"
 
-                # Initialise session state on first load
-                if key_state not in st.session_state:
-                    st.session_state[key_state] = default
+                # Initialise BOTH widget keys in session state on first load
+                if sl_key not in st.session_state:
+                    st.session_state[sl_key] = default
+                if ni_key not in st.session_state:
+                    st.session_state[ni_key] = default
 
-                # Callback: slider changed → update shared state
-                def on_slider(k=key_state, sk=f"sl_{col}"):
-                    st.session_state[k] = st.session_state[sk]
+                # Callback: slider changed → copy value to number input
+                def on_slider(slider_k=sl_key, num_k=ni_key):
+                    st.session_state[num_k] = st.session_state[slider_k]
 
-                # Callback: number input changed → update shared state
-                def on_number(k=key_state, nk=f"ni_{col}"):
-                    st.session_state[k] = st.session_state[nk]
+                # Callback: number input changed → copy value to slider
+                def on_number(slider_k=sl_key, num_k=ni_key):
+                    st.session_state[slider_k] = st.session_state[num_k]
 
-                # Slider — reads from shared state, writes back via callback
+                # Slider — reads/writes directly to sl_key (no 'value' arg needed)
                 st.slider(
                     col,
                     min_value=s_min,
                     max_value=s_max,
-                    value=float(st.session_state[key_state]),
-                    key=f"sl_{col}",
+                    key=sl_key,
                     on_change=on_slider,
                 )
 
-                # Number input — also reads from shared state, writes back via callback
+                # Number input — reads/writes directly to ni_key (no 'value' arg needed)
                 st.number_input(
                     "Manual entry",
                     min_value=s_min,
                     max_value=s_max,
-                    value=float(st.session_state[key_state]),
                     step=step,
                     format="%.2f",
-                    key=f"ni_{col}",
+                    key=ni_key,
                     on_change=on_number,
                     label_visibility="collapsed",
                 )
 
-                inputs[col] = float(st.session_state[key_state])
+                # Read the final value to use in your model inputs array
+                inputs[col] = float(st.session_state[sl_key])
                 if inputs[col] < lo or inputs[col] > hi:
                     out_of_range.append(col)
 

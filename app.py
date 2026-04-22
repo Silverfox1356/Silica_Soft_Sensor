@@ -173,24 +173,55 @@ if page == "🔬 Predict":
                 default   = float(DEFAULTS.get(col, (lo + hi) / 2))
                 s_min     = round(float(lo) * 0.8, 2)
                 s_max     = round(float(hi) * 1.2, 2)
-                key_state = f"sl_{col}"
+                step      = round((s_max - s_min) / 200, 3)
+                
+                # Define keys for the two widgets
+                sl_key = f"sl_{col}"
+                ni_key = f"ni_{col}"
 
-                if key_state not in st.session_state:
-                    st.session_state[key_state] = default
+                # Initialise BOTH widget keys in session state on first load
+                if sl_key not in st.session_state:
+                    st.session_state[sl_key] = default
+                if ni_key not in st.session_state:
+                    st.session_state[ni_key] = default
 
+                # Callback: slider changed → copy value to number input
+                def on_slider(slider_k=sl_key, num_k=ni_key):
+                    st.session_state[num_k] = st.session_state[slider_k]
+
+                # Callback: number input changed → copy value to slider
+                def on_number(slider_k=sl_key, num_k=ni_key):
+                    st.session_state[slider_k] = st.session_state[num_k]
+
+                # Slider
                 st.slider(
                     col,
                     min_value=s_min,
                     max_value=s_max,
-                    key=key_state,
+                    key=sl_key,
+                    on_change=on_slider,
                 )
 
-                inputs[col] = float(st.session_state[key_state])
+                # Number input
+                st.number_input(
+                    "Manual entry",
+                    min_value=s_min,
+                    max_value=s_max,
+                    step=step,
+                    format="%.2f",
+                    key=ni_key,
+                    on_change=on_number,
+                    label_visibility="collapsed",
+                )
+
+                # Read the final value to use in your model inputs array
+                inputs[col] = float(st.session_state[sl_key])
                 if inputs[col] < lo or inputs[col] > hi:
                     out_of_range.append(col)
 
                 st.markdown("<div style='margin-bottom:0.4rem'></div>", unsafe_allow_html=True)
 
+        # Implement the Tabbed UI
         tab_feed, tab_reag, tab_air, tab_lvl, tab_out = st.tabs([
             "🪨 Feed", "🧪 Reagents", "💨 Air Flow", "📏 Levels", "🎯 Conc."
         ])
